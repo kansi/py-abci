@@ -2,7 +2,7 @@ from io import BytesIO
 
 from abci.server import ProtocolHandler
 from abci.application import BaseApplication, CodeTypeOk
-from abci.encoding import read_message, write_message
+from abci.encoding import read_message
 
 from abci.types_pb2 import (
     Request, Response, ResponseException,
@@ -17,10 +17,9 @@ from abci.types_pb2 import (
     RequestBeginBlock, ResponseBeginBlock,
     RequestEndBlock, ResponseEndBlock,
     RequestCommit, ResponseCommit,
-    Validator,
+    Validator, PubKey
 )
 
-from abci.utils import str_to_bytes
 
 class ExampleApp(BaseApplication):
 
@@ -29,7 +28,8 @@ class ExampleApp(BaseApplication):
 
     def info(self, req):
         v = req.version
-        r = ResponseInfo(version=v, data="hello", last_block_height=0, last_block_app_hash=b'0x12')
+        r = ResponseInfo(version=v, data="hello", last_block_height=0,
+                         last_block_app_hash=b'0x12')
         return r
 
     def init_chain(self, req):
@@ -65,6 +65,7 @@ def __deserialze(raw: bytes) -> Request:
     resp, _ = read_message(BytesIO(raw), Response)
     return resp
 
+
 def test_handler():
     app = ExampleApp()
     p = ProtocolHandler(app)
@@ -91,7 +92,11 @@ def test_handler():
     assert resp.info.last_block_app_hash == b'0x12'
 
     # init_chain
-    v = [Validator(pub_key=b'a'), Validator(pub_key=b'b')]
+    pub_key_a = PubKey(type='AC26791624DE60', data=b'a')
+    pub_key_b = PubKey(type='AC26791624DE60', data=b'b')
+
+    v = [Validator(pub_key=pub_key_a, address=b'a_addr', power=10),
+         Validator(pub_key=pub_key_b, address=b'b_addr', power=10)]
     req = Request(init_chain=RequestInitChain(validators=v))
     raw = p.process('init_chain', req)
     resp = __deserialze(raw)
@@ -132,7 +137,7 @@ def test_handler():
     resp = __deserialze(raw)
     assert resp.end_block.validator_updates
     assert len(resp.end_block.validator_updates) == 2
-    assert resp.end_block.validator_updates[0].pub_key == b'a'
+    assert resp.end_block.validator_updates[0].pub_key == pub_key_a
 
     # Commit
     req = Request(commit=RequestCommit())
